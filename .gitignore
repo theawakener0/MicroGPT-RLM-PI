@@ -1,0 +1,56 @@
+# Build
+build/
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Compiled
+compile_commands.json
+
+# Data
+data/
+*.bin
+*.pt
+*.pth
+*.ckpt
+
+# Datasets
+*.txt
+*.json
+*.jsonl
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Model checkpoints
+checkpoints/
+*.safetensors
