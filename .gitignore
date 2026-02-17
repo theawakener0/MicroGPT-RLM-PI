@@ -5,6 +5,7 @@ build/
 *.so
 *.dylib
 *.exe
+.cache/
 
 # CMake
 CMakeCache.txt
