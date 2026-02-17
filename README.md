@@ -82,4 +82,4 @@ With 8GB RAM and gradient checkpointing:
 
 ## License
 
-![![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![![MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
