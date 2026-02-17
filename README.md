@@ -69,16 +69,6 @@ make -j4
 | Small | 50M | 8 | 8 | 512 |
 | Medium | 100M | 12 | 12 | 768 |
 
-## Project Structure
-
-```
-src/
-├── core/           # Tensor, Autograd, Math ops
-├── model/          # Transformer, Attention, Embeddings
-├── training/       # Trainer, Dataset, Tokenizer
-└── inference/      # Generator, Sampler
-```
-
 ## Training on Pi 5
 
 With 8GB RAM and gradient checkpointing:
@@ -92,4 +82,4 @@ With 8GB RAM and gradient checkpointing:
 
 ## License
 
-MIT
+![![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
