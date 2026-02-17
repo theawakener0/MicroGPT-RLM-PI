@@ -35,6 +35,13 @@ The model refines its internal representation through multiple recursive passes,
 - Gradient checkpointing for memory efficiency
 - Early exit token for adaptive recursion depth
 - Shared weights across recursion steps (RNN-like)
+- Character-level tokenizer
+
+## Current Status
+
+- **Working**: Forward pass, loss computation, generation
+- **Model size**: ~800K parameters (configurable)
+- **Test**: Runs on Raspberry Pi 5 ✅
 
 ## Requirements
 
@@ -51,27 +58,25 @@ cmake ..
 make -j4
 ```
 
-## Usage
+## Run
 
 ```bash
-# Train
-./microgpt train --dataset data/ --steps 1000
-
-# Generate
-./microgpt generate --checkpoint model.bin --prompt "hello"
+./microgpt
 ```
 
 ## Model Configuration
 
 | Model | Parameters | Layers | Heads | Embed Dim |
 |-------|------------|--------|-------|------------|
-| Micro | 10M | 6 | 4 | 256 |
-| Small | 50M | 8 | 8 | 512 |
-| Medium | 100M | 12 | 12 | 768 |
+| Micro | ~1M | 2-4 | 2 | 64-128 |
+| Small | ~10M | 6 | 4 | 256 |
+| Medium | ~50M | 8 | 8 | 512 |
+| Large | ~100M | 12 | 12 | 768 |
 
 ## Training on Pi 5
 
 With 8GB RAM and gradient checkpointing:
+- 1M model: ~1-2 hours for 1M tokens
 - 10M model: ~3-5 days for 1B tokens
 - 50M model: ~2-3 weeks for 5B tokens
 
@@ -82,4 +87,4 @@ With 8GB RAM and gradient checkpointing:
 
 ## License
 
-![![MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+MIT License - see LICENSE file
