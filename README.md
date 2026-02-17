@@ -41,7 +41,7 @@ The model refines its internal representation through multiple recursive passes,
 
 - **Working**: Forward pass, loss computation, generation
 - **Model size**: ~800K parameters (configurable)
-- **Test**: Runs on Raspberry Pi 5 ✅
+- **Test**: Runs on Raspberry Pi 5
 
 ## Requirements
 
@@ -62,6 +62,85 @@ make -j4
 
 ```bash
 ./microgpt
+```
+
+## Training
+
+### Quick Start (Demo)
+
+The built-in demo trains on sample names:
+
+```bash
+./microgpt
+```
+
+### Training with Custom Data
+
+1. **Prepare your dataset** (text file, one document per line):
+
+```bash
+echo -e "emma\nolivia\nava\nisabella\nsophia" > data/names.txt
+```
+
+2. **Modify main.cpp** to load your data:
+
+```cpp
+// Load your dataset
+Dataset dataset;
+dataset.load_file("data/names.txt");
+
+// Train
+Trainer trainer(&model, &tokenizer, batch_size=1, max_steps=10000);
+trainer.train(dataset);
+```
+
+3. **Configure model** (in main.cpp):
+
+```cpp
+ModelConfig config;
+config.vocab_size = tokenizer.size();
+config.embed_dim = 128;      // Increase for larger model
+config.num_layers = 6;       // More layers = more capacity
+config.num_heads = 4;
+config.max_seq_len = 32;     // Max sequence length
+config.hidden_dim = 512;     // FFN hidden size (typically 4x embed_dim)
+```
+
+4. **Training parameters**:
+
+```cpp
+config.learning_rate = 0.001f;     // Typical: 1e-4 to 1e-3
+config.batch_size = 1;              // Small for Pi 5 memory
+config.gradient_accumulation = 32;  // Effective batch = 32
+config.max_steps = 100000;          // More steps = better model
+```
+
+### Training Tips for Pi 5
+
+- **Start small**: 128 embed_dim, 2 layers
+- **Use gradient accumulation**: Small batch + accumulation = larger effective batch
+- **Monitor memory**: Watch RAM usage, reduce batch if OOM
+- **Active cooling**: Training heats up Pi 5 significantly
+- **Use NVMe storage**: If available, for faster data loading
+- **Be patient**: Training on Pi 5 is slow but works!
+
+### Training Metrics to Watch
+
+- **Loss**: Should decrease over time (starts ~3.0 for random)
+- **Perplexity**: `exp(loss)` - lower is better
+- **Generation quality**: Check output periodically
+
+### Example Training Output
+
+```
+[INFO] 00:00:00 | Starting training...
+[INFO] 00:00:10 | Step 0 | Loss: 2.985
+[INFO] 00:00:20 | Step 100 | Loss: 2.752
+[INFO] 00:00:30 | Step 200 | Loss: 2.431
+[INFO] 00:00:40 | Step 300 | Loss: 1.982
+...
+[INFO] 00:05:00 | Training complete!
+[INFO] Generated: 'emily'
 ```
 
 ## Model Configuration
