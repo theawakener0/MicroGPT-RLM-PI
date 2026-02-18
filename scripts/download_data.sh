@@ -4,7 +4,7 @@
 
 mkdir -p data
 
-echo "=== MicroGPT-RLM Data Download Script ==="
+echo "=== MicroGPT-RLM-PI Data Download Script ==="
 echo ""
 
 # Check if curl is available
