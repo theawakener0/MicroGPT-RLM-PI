@@ -181,4 +181,4 @@ Once upon a time in a land far away...
 
 ## License
 
-MIT License - see LICENSE file
+MIT License - see [LICENSE](LICENSE) file
