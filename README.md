@@ -18,28 +18,45 @@ input → transformer(1 pass) → output
 ### RLM-Enhanced
 ```
 input → state₀
-state₁ = transformer(state₀ + input)
-state₂ = transformer(state₁ + input)
+state₁ = transformer(state₀) + state₀  (residual)
+state₂ = transformer(state₁) + state₁
 ...
-output = decode(state_n)
+output = lm_head(ln_f(state_n))
 ```
 
-The model refines its internal representation through multiple recursive passes, trading compute time for intelligence - perfect for constrained hardware like Raspberry Pi.
+The model refines its internal representation through multiple recursive passes with residual connections, trading compute time for intelligence - perfect for constrained hardware like Raspberry Pi.
 
 ## Features
 
 - Native C++ with no external ML dependencies
-- Custom autograd engine (like micrograd)
-- ARM NEON SIMD optimization for Pi 5
+- **Complete autograd engine** - Full backward propagation implementation
+- **ARM NEON SIMD optimization** for Raspberry Pi 5
+- **Advanced inference sampling** - Temperature, top-k, top-p, repetition penalty
 - Character-level tokenizer
 - Chat-style inference mode
+- **RLM recursive forward** with early exit capability
 
 ## Current Status
 
-- **Working**: Forward pass, loss computation, generation, chat mode
-- **Model size**: ~800K parameters (configurable)
-- **Test**: Runs on Raspberry Pi 5
-- **Data**: ~14MB cleaned corpus included
+| Feature | Status |
+|---------|--------|
+| Forward pass | ✅ Working |
+| Backpropagation | ✅ Complete |
+| Weight updates (Adam) | ✅ Implemented |
+| Loss computation | ✅ Working |
+| Text generation | ✅ Working |
+| Chat mode | ✅ Working |
+| RLM recursive forward | ✅ Working |
+| NEON optimizations | ✅ Working |
+| Sampler (temp/top-k/top-p) | ✅ Working |
+| Model save/load | ✅ Working |
+
+### Model Specifications
+
+- **Parameters**: ~800K (default config)
+- **Vocab Size**: 256 (expandable)
+- **Sequence Length**: 256 (configurable)
+- **Tested on**: Raspberry Pi 5
 
 ## Requirements
 
@@ -161,14 +178,11 @@ The checkpoint file contains:
 #### Current Capabilities
 - **Forward pass** - Model processes tokens correctly
 - **Loss computation** - Cross-entropy loss calculated
-- **Generation** - Produces text token by token
+- **Backpropagation** - Full gradient computation through all layers
+- **Weight updates** - Adam optimizer integration
+- **Generation** - Produces text token by token with advanced sampling
 - **Save/Load** - Checkpoint saving and loading works
-- **Training loop** - Iterates over data (forward-only, no weight updates yet)
-
-#### Limitations
-- **No backprop** - Forward-only, model stays random without weight updates
-- **Basic model** - ~800K parameters
-- **Character-level** - No BPE tokenizer
+- **RLM recursive forward** - Multiple refinement passes with early exit
 
 #### After Full Training
 | Dataset | What Model Learns |
@@ -207,20 +221,61 @@ config.max_seq_len = 128;
 config.hidden_dim = 1024;
 ```
 
-## Chat Mode
+## RLM Configuration
 
-```bash
-./microgpt --chat
+The Recursive Language Model allows multiple refinement passes:
+
+```cpp
+config.recursion_steps = 3;       // Number of recursive passes
+config.exit_threshold = 0.8f;      // Early exit probability threshold
+config.min_recursion_steps = 1;   // Minimum passes before early exit
 ```
 
-Example:
-```
-> Hello
-Hello! How are you today?
+### How RLM Works
 
-> Tell me a story
-Once upon a time in a land far away...
+1. Input embeddings are computed once
+2. For each recursion step:
+   - Apply layer normalization
+   - Pass through transformer layers
+   - Add residual connection: `state = state + new_state`
+   - Check exit head for early termination
+3. Final layer norm and lm_head produce logits
+
+## Inference Sampling
+
+The sampler supports multiple generation strategies:
+
+| Parameter | Description | Recommended |
+|-----------|-------------|-------------|
+| `temperature` | Controls randomness (1.0 = default, lower = more deterministic) | 0.7-1.0 |
+| `top_k` | Limits to k most likely tokens (0 = disabled) | 40 |
+| `top_p` | Nucleus sampling threshold (0.0 = disabled) | 0.9 |
+| `repetition_penalty` | Penalizes repeated tokens (1.0 = no penalty) | 1.1-1.5 |
+
+## Performance
+
+### Forward Pass Complexity
 ```
+O(L × S² × D) where:
+  L = number of layers
+  S = sequence length
+  D = embedding dimension
+```
+
+### Estimated Performance on Raspberry Pi 5
+
+| Operation | Time (approx) |
+|-----------|---------------|
+| Forward pass (32 tokens, 4 layers) | 50-100ms |
+| Token generation | 10-20ms/token |
+| Training step (small batch) | 200-500ms |
+
+### NEON Optimizations
+
+The following operations use ARM NEON SIMD:
+- Matrix multiplication (fused multiply-add)
+- Softmax (vectorized exp/divide)
+- Element-wise operations (add, multiply, relu)
 
 ## Model Configuration
 
@@ -229,6 +284,34 @@ Once upon a time in a land far away...
 | Micro | ~1M | 2-4 | 2 | 64-128 |
 | Small | ~10M | 6 | 4 | 256 |
 | Medium | ~50M | 8 | 8 | 512 |
+
+## Project Structure
+
+```
+src/
+├── core/
+│   ├── tensor.hpp/cpp      # Tensor data structure
+│   ├── math_ops.hpp/cpp    # Math operations (NEON optimized)
+│   └── autograd.hpp/cpp   # Autograd engine
+├── model/
+│   ├── model.hpp/cpp      # GPT model
+│   ├── transformer.hpp/cpp # Transformer blocks
+│   ├── attention.hpp/cpp  # Multi-head attention
+│   └── embedding.hpp/cpp  # Token/positional embeddings
+├── training/
+│   ├── trainable_model.hpp/cpp # Trainable version with backprop
+│   ├── transformer.hpp/cpp # Trainable transformer layers
+│   ├── nn.hpp/cpp        # Neural network modules
+│   ├── tokenizer.hpp/cpp  # Character-level tokenizer
+│   ├── trainer.hpp/cpp    # Training loop
+│   └── dataset.hpp/cpp    # Data loading
+├── inference/
+│   ├── sampler.hpp/cpp    # Sampling strategies
+│   └── generator.hpp/cpp  # Text generation
+└── utils/
+    ├── logger.hpp/cpp     # Logging utilities
+    └── random.hpp/cpp     # Random number generation
+```
 
 ## References
 
