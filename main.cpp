@@ -13,9 +13,21 @@
 using namespace microgpt;
 
 void print_chat_banner() {
+
+    std::cout << R"(
+                                                         
+                                                 
+         ▀▀                                 ██   
+███▄███▄ ██  ▄████ ████▄ ▄███▄ ▄████ ████▄ ▀██▀▀ 
+██ ██ ██ ██  ██    ██ ▀▀ ██ ██ ██ ██ ██ ██  ██   
+██ ██ ██ ██▄ ▀████ ██    ▀███▀ ▀████ ████▀  ██   
+                                  ██ ██          
+                                ▀▀▀  ▀▀
+    )"
+
     std::cout << "\n";
     std::cout << "╔══════════════════════════════════════════╗\n";
-    std::cout << "║     MicroGPT-RLM Chat Mode              ║\n";
+    std::cout << "║     MicroGPT-RLM-PI Chat Mode              ║\n";
     std::cout << "║     Type 'quit' to exit                ║\n";
     std::cout << "╚══════════════════════════════════════════╝\n";
     std::cout << "\n";
