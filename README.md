@@ -1,6 +1,6 @@
 # MicroGPT-RLM-PI
 
-A native C++ implementation of a GPT-like language model with Recursive Language Model (RLM) architecture, optimized for Raspberry Pi 5. **100% Python-free** - built entirely in C/C++.
+A native C++ implementation of a GPT-like language model with Recursive Language Model (RLM) architecture, optimized for Raspberry Pi 5.
 
 ## Overview
 
@@ -28,7 +28,6 @@ The model refines its internal representation through multiple recursive passes,
 
 ## Features
 
-- **100% Python-free**: Pure C/C++ implementation
 - Native C++ with no external ML dependencies
 - Custom autograd engine (like micrograd)
 - ARM NEON SIMD optimization for Pi 5
@@ -39,7 +38,7 @@ The model refines its internal representation through multiple recursive passes,
 
 - **Working**: Forward pass, loss computation, generation, chat mode
 - **Model size**: ~800K parameters (configurable)
-- **Test**: Runs on Raspberry Pi 5 ✅
+- **Test**: Runs on Raspberry Pi 5
 - **Data**: ~3MB cleaned corpus included
 
 ## Requirements
@@ -60,7 +59,7 @@ make -j4
 ## Quick Start
 
 ```bash
-# 1. Download training data (bash/curl only - no Python!)
+# 1. Download training data
 ./scripts/download_data.sh
 
 # 2. Train on names
@@ -174,38 +173,6 @@ Once upon a time in a land far away...
 | Micro | ~1M | 2-4 | 2 | 64-128 |
 | Small | ~10M | 6 | 4 | 256 |
 | Medium | ~50M | 8 | 8 | 512 |
-
-## Project Structure
-
-```
-microgpt-2-pi/
-├── CMakeLists.txt
-├── main.cpp
-├── LICENSE
-├── README.md
-├── data/                      # Training data (after download)
-│   ├── names.txt             # 32K names
-│   ├── training_data.txt      # Combined corpus
-│   └── code.txt              # Code examples
-├── scripts/
-│   └── download_data.sh      # Data download (bash/curl only!)
-└── src/
-    ├── core/                 # Tensor, Autograd, Math ops
-    ├── model/                # Embedding, Attention, Transformer
-    ├── training/             # Tokenizer, Trainer
-    ├── inference/            # Sampler, Generator
-    └── utils/                # Logger, Random, Timer
-```
-
-## Why C++ for AI?
-
-This project demonstrates that you don't need Python or PyTorch to build AI:
-
-- **No dependencies**: Pure standard library + OpenMP
-- **Portable**: Runs on any system with a C++ compiler
-- **Educational**: Understand every line of code
-- **Efficient**: NEON SIMD optimizations for ARM
-- **Learning**: Like micrograd, you see the math
 
 ## References
 
