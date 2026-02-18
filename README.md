@@ -1,4 +1,4 @@
-# MicroGPT-RLM
+# MicroGPT-RLM-PI
 
 A native C++ implementation of a GPT-like language model with Recursive Language Model (RLM) architecture, optimized for Raspberry Pi 5.
 
