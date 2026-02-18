@@ -28,13 +28,13 @@ class Linear {
 public:
     int in_features;
     int out_features;
-    bool bias;
+    bool use_bias;
     
     Tensor weight;
-    Tensor bias_vec;
+    Tensor bias;
     
     Linear() = default;
-    Linear(int in_features, int out_features, bool bias = false);
+    Linear(int in_features, int out_features, bool use_bias = false);
     
     Tensor forward(const Tensor& x);
     void init_weights(float std = 0.02f);

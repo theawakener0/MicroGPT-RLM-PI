@@ -113,6 +113,7 @@ void run_training_mode(GPT& model, Tokenizer& tokenizer, const std::string& data
     
     int log_interval = 100;
     int save_interval = 1000;
+    float learning_rate = 0.01f;
     
     for (int step = 0; step < max_steps; step++) {
         int doc_idx = step % documents.size();
@@ -169,7 +170,6 @@ void run_training_mode(GPT& model, Tokenizer& tokenizer, const std::string& data
     Logger::info("Training complete!");
     Logger::info("Best loss: " + std::to_string(best_loss));
     
-    // Save checkpoint if path provided
     if (!save_path.empty()) {
         Logger::info("Saving checkpoint to " + save_path);
         model.save(save_path);

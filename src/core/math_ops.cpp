@@ -130,13 +130,39 @@ void tanh_inplace(Tensor& a) {
 // ============ Matrix Operations ============
 
 Tensor matmul(const Tensor& a, const Tensor& b) {
-    // Simple matrix multiplication: a (m x n) * b (n x k) -> (m x k)
     int m = a.rows();
     int n = a.cols();
     int k = b.cols();
     
     Tensor result(Shape{m, k}, false);
     
+    #if USE_NEON
+    for (int i = 0; i < m; i++) {
+        for (int j = 0; j < k; j++) {
+            float sum = 0.0f;
+            int l = 0;
+            
+            float32x4_t vsum = vdupq_n_f32(0.0f);
+            
+            for (; l + 3 < n; l += 4) {
+                float32x4_t va = vld1q_f32(&a.data[i * n + l]);
+                float32x4_t vb = vld1q_f32(&b.data[l * k + j]);
+                vsum = vmlaq_f32(vsum, va, vb);
+            }
+            
+            float32x2_t vsum_low = vget_low_f32(vsum);
+            float32x2_t vsum_high = vget_high_f32(vsum);
+            float32x2_t vsum_pair = vadd_f32(vsum_low, vsum_high);
+            sum = vget_lane_f32(vsum_pair, 0) + vget_lane_f32(vsum_pair, 1);
+            
+            for (; l < n; l++) {
+                sum += a.data[i * n + l] * b.data[l * k + j];
+            }
+            
+            result.data[i * k + j] = sum;
+        }
+    }
+    #else
     for (int i = 0; i < m; i++) {
         for (int j = 0; j < k; j++) {
             float sum = 0.0f;
@@ -146,6 +172,7 @@ Tensor matmul(const Tensor& a, const Tensor& b) {
             result.data[i * k + j] = sum;
         }
     }
+    #endif
     
     return result;
 }
@@ -213,25 +240,64 @@ Tensor layernorm(const Tensor& x, float eps) {
 Tensor softmax(const Tensor& logits) {
     int n = logits.size();
     
-    // Find max for numerical stability
+    #if USE_NEON
     float max_val = logits.data[0];
     for (int i = 1; i < n; i++) {
         max_val = std::max(max_val, logits.data[i]);
     }
+    #else
+    float max_val = logits.data[0];
+    for (int i = 1; i < n; i++) {
+        max_val = std::max(max_val, logits.data[i]);
+    }
+    #endif
     
-    // Compute exponentials
     Tensor exp_logits(logits.shape, false);
     float sum_exp = 0.0f;
+    
+    #if USE_NEON
+    float32x4_t vmax = vdupq_n_f32(max_val);
+    int i = 0;
+    for (; i + 3 < n; i += 4) {
+        float32x4_t vx = vld1q_f32(&logits.data[i]);
+        float32x4_t vdiff = vsubq_f32(vx, vmax);
+        float32x4_t vexp = exp_ps(vdiff);
+        vst1q_f32(&exp_logits.data[i], vexp);
+        
+        float32x2_t vsum_low = vget_low_f32(vexp);
+        float32x2_t vsum_high = vget_high_f32(vexp);
+        float32x2_t vsum_pair = vadd_f32(vsum_low, vsum_high);
+        sum_exp += vget_lane_f32(vsum_pair, 0) + vget_lane_f32(vsum_pair, 1);
+    }
+    for (; i < n; i++) {
+        exp_logits.data[i] = std::exp(logits.data[i] - max_val);
+        sum_exp += exp_logits.data[i];
+    }
+    #else
     for (int i = 0; i < n; i++) {
         exp_logits.data[i] = std::exp(logits.data[i] - max_val);
         sum_exp += exp_logits.data[i];
     }
+    #endif
     
-    // Normalize
     Tensor result(logits.shape, false);
+    
+    #if USE_NEON
+    float32x4_t vsum = vdupq_n_f32(sum_exp);
+    int j = 0;
+    for (; j + 3 < n; j += 4) {
+        float32x4_t vexp = vld1q_f32(&exp_logits.data[j]);
+        float32x4_t vnorm = vdivq_f32(vexp, vsum);
+        vst1q_f32(&result.data[j], vnorm);
+    }
+    for (; j < n; j++) {
+        result.data[j] = exp_logits.data[j] / sum_exp;
+    }
+    #else
     for (int i = 0; i < n; i++) {
         result.data[i] = exp_logits.data[i] / sum_exp;
     }
+    #endif
     
     return result;
 }

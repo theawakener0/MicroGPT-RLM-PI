@@ -246,10 +246,15 @@ RL_GPT::RecursionResult RL_GPT::recursive_forward(const std::vector<int>& token_
     Tensor state = transformer.embedding.forward(token_ids, pos_ids);
     
     for (int step = 0; step < config.recursion_steps; step++) {
-        state = transformer.ln_f.forward(state);
+        Tensor normalized = transformer.ln_f.forward(state);
         
+        Tensor new_state = normalized;
         for (auto& layer : transformer.layers) {
-            state = layer.forward(state);
+            new_state = layer.forward(new_state);
+        }
+        
+        for (int i = 0; i < state.size(); i++) {
+            state.data[i] = state.data[i] + new_state.data[i];
         }
         
         Tensor exit_logits = exit_head.forward(state);

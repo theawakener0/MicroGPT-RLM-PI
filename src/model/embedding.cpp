@@ -60,12 +60,12 @@ int Embedding::num_parameters() const {
     return vocab_size * embed_dim + max_seq_len * embed_dim;
 }
 
-Linear::Linear(int in_features, int out_features, bool bias)
-    : in_features(in_features), out_features(out_features), bias(bias) {
+Linear::Linear(int in_features, int out_features, bool use_bias)
+    : in_features(in_features), out_features(out_features), use_bias(use_bias) {
     
     weight = Tensor(Shape{out_features, in_features}, true);
-    if (bias) {
-        bias_vec = Tensor(Shape{out_features}, true);
+    if (use_bias) {
+        bias = Tensor(Shape{out_features}, true);
     }
     
     init_weights();
@@ -83,8 +83,8 @@ Tensor Linear::forward(const Tensor& x) {
             for (int k = 0; k < in_feat; k++) {
                 sum += x.data[i * in_feat + k] * weight.data[j * in_feat + k];
             }
-            if (bias) {
-                sum += bias_vec.data[j];
+            if (use_bias) {
+                sum += bias.data[j];
             }
             result.data[i * out_features + j] = sum;
         }
@@ -95,13 +95,13 @@ Tensor Linear::forward(const Tensor& x) {
 
 void Linear::init_weights(float std) {
     math::normal_(weight, 0.0f, std);
-    if (bias) {
-        math::fill(bias_vec, 0.0f);
+    if (use_bias) {
+        math::fill(bias, 0.0f);
     }
 }
 
 int Linear::num_parameters() const {
-    return out_features * in_features + (bias ? out_features : 0);
+    return out_features * in_features + (use_bias ? out_features : 0);
 }
 
 }
