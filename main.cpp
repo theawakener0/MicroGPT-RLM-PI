@@ -23,12 +23,12 @@ void print_chat_banner() {
 ██ ██ ██ ██▄ ▀████ ██    ▀███▀ ▀████ ████▀  ██   
                                   ██ ██          
                                 ▀▀▀  ▀▀
-    )"
+    )";
 
     std::cout << "\n";
     std::cout << "╔══════════════════════════════════════════╗\n";
-    std::cout << "║     MicroGPT-RLM-PI Chat Mode              ║\n";
-    std::cout << "║     Type 'quit' to exit                ║\n";
+    std::cout << "║        MicroGPT-RLM-PI Chat Mode         ║\n";
+    std::cout << "║          Type '/quit' to exit            ║\n";
     std::cout << "╚══════════════════════════════════════════╝\n";
     std::cout << "\n";
 }
@@ -67,7 +67,7 @@ void run_chat_mode(GPT& model, Tokenizer& tokenizer) {
         std::cout << "> ";
         std::getline(std::cin, input);
         
-        if (input == "quit" || input == "exit" || input == "q") {
+        if (input == "/quit" || input == "/exit" || input == ":q") {
             std::cout << "Goodbye!\n";
             break;
         }
