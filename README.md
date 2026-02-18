@@ -36,21 +36,6 @@ The model refines its internal representation through multiple recursive passes 
 - Chat-style inference mode
 - **RLM recursive forward** with early exit capability
 
-## Current Status
-
-| Feature | Status |
-|---------|--------|
-| Forward pass | ✅ Working |
-| Backpropagation | ✅ Complete |
-| Weight updates (Adam) | ✅ Implemented |
-| Loss computation | ✅ Working |
-| Text generation | ✅ Working |
-| Chat mode | ✅ Working |
-| RLM recursive forward | ✅ Working |
-| NEON optimizations | ✅ Working |
-| Sampler (temp/top-k/top-p) | ✅ Working |
-| Model save/load | ✅ Working |
-
 ### Model Specifications
 
 - **Parameters**: ~800K (default config)
@@ -284,34 +269,6 @@ The following operations use ARM NEON SIMD:
 | Micro | ~1M | 2-4 | 2 | 64-128 |
 | Small | ~10M | 6 | 4 | 256 |
 | Medium | ~50M | 8 | 8 | 512 |
-
-## Project Structure
-
-```
-src/
-├── core/
-│   ├── tensor.hpp/cpp      # Tensor data structure
-│   ├── math_ops.hpp/cpp    # Math operations (NEON optimized)
-│   └── autograd.hpp/cpp   # Autograd engine
-├── model/
-│   ├── model.hpp/cpp      # GPT model
-│   ├── transformer.hpp/cpp # Transformer blocks
-│   ├── attention.hpp/cpp  # Multi-head attention
-│   └── embedding.hpp/cpp  # Token/positional embeddings
-├── training/
-│   ├── trainable_model.hpp/cpp # Trainable version with backprop
-│   ├── transformer.hpp/cpp # Trainable transformer layers
-│   ├── nn.hpp/cpp        # Neural network modules
-│   ├── tokenizer.hpp/cpp  # Character-level tokenizer
-│   ├── trainer.hpp/cpp    # Training loop
-│   └── dataset.hpp/cpp    # Data loading
-├── inference/
-│   ├── sampler.hpp/cpp    # Sampling strategies
-│   └── generator.hpp/cpp  # Text generation
-└── utils/
-    ├── logger.hpp/cpp     # Logging utilities
-    └── random.hpp/cpp     # Random number generation
-```
 
 ## References
 

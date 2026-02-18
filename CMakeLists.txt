@@ -1,4 +1,4 @@
-# MicroGPT-RLM: A Native C++ GPT with Recursive Language Models
+# MicroGPT-RLM-PI: A Native C++ GPT with Recursive Language Models
 # Target: Raspberry Pi 5 (8GB RAM)
 # Architecture: Transformer with RLM iterative refinement
 
