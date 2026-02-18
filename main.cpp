@@ -86,7 +86,7 @@ void run_chat_mode(GPT& model, Tokenizer& tokenizer) {
     }
 }
 
-void run_training_mode(GPT& model, Tokenizer& tokenizer, const std::string& data_path, int max_steps) {
+void run_training_mode(GPT& model, Tokenizer& tokenizer, const std::string& data_path, int max_steps, const std::string& save_path = "") {
     Logger::info("Loading dataset from: " + data_path);
     
     std::vector<std::string> documents;
@@ -168,6 +168,12 @@ void run_training_mode(GPT& model, Tokenizer& tokenizer, const std::string& data
     
     Logger::info("Training complete!");
     Logger::info("Best loss: " + std::to_string(best_loss));
+    
+    // Save checkpoint if path provided
+    if (!save_path.empty()) {
+        Logger::info("Saving checkpoint to " + save_path);
+        model.save(save_path);
+    }
     
     Logger::info("\n=== Testing Generation ===");
     std::string test_prompt = tokenizer.decode({tokenizer.bos_id});
@@ -305,6 +311,8 @@ int main(int argc, char* argv[]) {
     std::string data_path;
     int max_steps = 1000;
     std::string checkpoint_path;
+    std::string save_checkpoint_path;
+    std::string generate_prompt;
     
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -314,12 +322,20 @@ int main(int argc, char* argv[]) {
             mode = "train";
         } else if (arg == "--demo") {
             mode = "demo";
+        } else if (arg == "--generate") {
+            mode = "generate";
         } else if (arg == "--data" && i + 1 < argc) {
             data_path = argv[++i];
         } else if (arg == "--steps" && i + 1 < argc) {
             max_steps = std::stoi(argv[++i]);
         } else if (arg == "--checkpoint" && i + 1 < argc) {
             checkpoint_path = argv[++i];
+        } else if (arg == "--save_checkpoint" && i + 1 < argc) {
+            save_checkpoint_path = argv[++i];
+        } else if (arg == "--load_checkpoint" && i + 1 < argc) {
+            checkpoint_path = argv[++i];
+        } else if (arg == "--prompt" && i + 1 < argc) {
+            generate_prompt = argv[++i];
         }
     }
     
@@ -331,6 +347,7 @@ int main(int argc, char* argv[]) {
     } else if (mode == "train") {
         if (data_path.empty()) {
             Logger::error("Please specify --data <path>");
+            Logger::info("Usage: ./microgpt --train --data data/names.txt --steps 10000 [--save_checkpoint model.bin]");
             return 1;
         }
         
@@ -347,13 +364,19 @@ int main(int argc, char* argv[]) {
         config.hidden_dim = config.embed_dim * 4;
         
         GPT model(config);
-        model.init_weights(0.02f);
         
-        run_training_mode(model, tokenizer, data_path, max_steps);
-    } else if (mode == "chat") {
-        Logger::info("Chat mode requires a trained model checkpoint");
-        Logger::info("Run --train first, then use --chat --checkpoint <file>");
+        // Load checkpoint if specified
+        if (!checkpoint_path.empty()) {
+            model.load(checkpoint_path);
+        } else {
+            model.init_weights(0.02f);
+        }
         
+        run_training_mode(model, tokenizer, data_path, max_steps, save_checkpoint_path);
+        
+        Logger::info("Training complete!");
+        
+    } else if (mode == "generate") {
         std::vector<std::string> sample_data = {"hello", "hi", "how", "are", "you"};
         Tokenizer tokenizer;
         tokenizer.build(sample_data);
@@ -366,7 +389,63 @@ int main(int argc, char* argv[]) {
         config.max_seq_len = 32;
         
         GPT model(config);
-        model.init_weights(0.02f);
+        
+        if (!checkpoint_path.empty()) {
+            model.load(checkpoint_path);
+            Logger::info("Loaded checkpoint: " + checkpoint_path);
+        } else {
+            Logger::warning("No checkpoint loaded, using random weights");
+            model.init_weights(0.02f);
+        }
+        
+        std::string prompt = generate_prompt.empty() ? tokenizer.decode({tokenizer.bos_id}) : generate_prompt;
+        
+        Logger::info("Generating text...");
+        std::vector<int> seed;
+        for (char c : prompt) {
+            if (tokenizer.char_to_id.count(c)) {
+                seed.push_back(tokenizer.char_to_id[c]);
+            }
+        }
+        if (seed.empty()) {
+            seed = {tokenizer.bos_id};
+        }
+        
+        for (int i = 0; i < 50; i++) {
+            Tensor logits = model.forward(seed);
+            int next_token = model.predict_next(logits);
+            
+            if (next_token == tokenizer.bos_id || next_token == tokenizer.eos_id) {
+                break;
+            }
+            
+            seed.push_back(next_token);
+        }
+        
+        std::string generated = tokenizer.decode(seed);
+        Logger::info("Generated: '" + generated + "'");
+        
+    } else if (mode == "chat") {
+        std::vector<std::string> sample_data = {"hello", "hi", "how", "are", "you"};
+        Tokenizer tokenizer;
+        tokenizer.build(sample_data);
+        
+        ModelConfig config;
+        config.vocab_size = tokenizer.size();
+        config.embed_dim = 128;
+        config.num_layers = 4;
+        config.num_heads = 4;
+        config.max_seq_len = 32;
+        
+        GPT model(config);
+        
+        if (!checkpoint_path.empty()) {
+            model.load(checkpoint_path);
+            Logger::info("Loaded checkpoint: " + checkpoint_path);
+        } else {
+            Logger::warning("No checkpoint loaded - using random weights");
+            model.init_weights(0.02f);
+        }
         
         run_chat_mode(model, tokenizer);
     }

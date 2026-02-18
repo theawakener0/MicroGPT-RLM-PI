@@ -101,27 +101,81 @@ This downloads and cleans:
 
 ## Training
 
-### Training Commands
+### Complete Workflow
 
+#### 1. Demo (Quick Test)
 ```bash
-# Train on names (learns to generate names)
-./microgpt --train --data data/names.txt --steps 50000
+./microgpt
+```
 
-# Train on literature (learns English text)
-./microgpt --train --data data/training_data.txt --steps 100000
+#### 2. Train a Model
+```bash
+# Train on names
+./microgpt --train --data data/names.txt --steps 10000 --save_checkpoint model.bin
 
-# Train on code (learns programming)
-./microgpt --train --data data/code.txt --steps 50000
+# Train on literature
+./microgpt --train --data data/training_data.txt --steps 50000 --save_checkpoint model.bin
+
+# Continue training from checkpoint
+./microgpt --train --data data/names.txt --steps 10000 --load_checkpoint model.bin --save_checkpoint model_new.bin
+```
+
+#### 3. Generate Text
+```bash
+# Generate with trained checkpoint
+./microgpt --generate --checkpoint model.bin --prompt "Once upon"
+
+# Generate with random weights (for testing)
+./microgpt --generate --prompt "Hello"
+```
+
+#### 4. Chat Mode
+```bash
+# Start interactive chat
+./microgpt --chat --checkpoint model.bin
+
+# Chat with random weights (for testing)
+./microgpt --chat
 ```
 
 ### Training Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--train` | - | Training mode |
-| `--data` | required | Path to training data |
-| `--steps` | 1000 | Number of training steps |
-| `--chat` | - | Interactive chat mode |
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--train` | Training mode | |
+| `--data <path>` | Training data file | `--data data/names.txt` |
+| `--steps <n>` | Number of steps | `--steps 50000` |
+| `--save_checkpoint <path>` | Save model to file | `--save_checkpoint model.bin` |
+| `--load_checkpoint <path>` | Load model from file | `--load_checkpoint model.bin` |
+| `--generate` | Text generation mode | |
+| `--prompt <text>` | Prompt for generation | `--prompt "Hello"` |
+| `--chat` | Interactive chat mode | |
+| `--checkpoint <path>` | Shorthand for load | `--checkpoint model.bin` |
+
+The checkpoint file contains:
+- Model configuration (vocab size, layers, etc.)
+- All model weights (embeddings, attention, MLP layers)
+
+### What to Expect
+
+#### Current Capabilities
+- **Forward pass** - Model processes tokens correctly
+- **Loss computation** - Cross-entropy loss calculated
+- **Generation** - Produces text token by token
+- **Save/Load** - Checkpoint saving and loading works
+- **Training loop** - Iterates over data (forward-only, no weight updates yet)
+
+#### Limitations
+- **No backprop** - Forward-only, model stays random without weight updates
+- **Basic model** - ~800K parameters
+- **Character-level** - No BPE tokenizer
+
+#### After Full Training
+| Dataset | What Model Learns |
+|---------|------------------|
+| names.txt | Generate new names like "emily", "olivia" |
+| training_data.txt | English text patterns |
+| code.txt | Python-like syntax |
 
 ### Training Tips for Pi 5
 
