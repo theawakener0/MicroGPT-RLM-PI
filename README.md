@@ -39,7 +39,7 @@ The model refines its internal representation through multiple recursive passes,
 - **Working**: Forward pass, loss computation, generation, chat mode
 - **Model size**: ~800K parameters (configurable)
 - **Test**: Runs on Raspberry Pi 5
-- **Data**: ~3MB cleaned corpus included
+- **Data**: ~14MB cleaned corpus included
 
 ## Requirements
 
@@ -81,8 +81,9 @@ make -j4
 | moby_dick.txt | 1.2MB | 19K | Adventure |
 | sherlock_holmes.txt | 569KB | 9K | Mystery/dialogue |
 | alice_wonderland.txt | 147KB | 2K | Children's |
+| wikitext.txt | **11MB** | 37K | Wikipedia articles |
 | code.txt | 4KB | ~50 | Code examples |
-| training_data.txt | **3MB** | 49K | Combined corpus |
+| training_data.txt | **14MB** | 85K | Combined corpus |
 
 ### Download Script
 
@@ -92,6 +93,7 @@ make -j4
 
 This downloads and cleans:
 - 6 classic books from Project Gutenberg (cleaned)
+- WikiText-2 (Wikipedia articles)
 - 32K baby names
 - Code samples
 

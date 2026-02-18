@@ -130,7 +130,26 @@ fi
 echo ""
 
 # ============================================
-# 7. CODE (from various sources)
+# 7. WIKITEXT (Wikipedia articles)
+# ============================================
+if [ ! -f "data/wikitext.txt" ]; then
+    echo "7. Downloading WikiText-2..."
+    curl -L -o data/wikitext.txt \
+        "https://cosmo.zip/pub/datasets/wikitext-2-raw/wiki.train.raw" \
+        --silent --show-error 2>/dev/null
+    if [ -s "data/wikitext.txt" ]; then
+        echo "   Done! ($(wc -l < data/wikitext.txt) lines)"
+    else
+        echo "   Warning: Download failed, skipping..."
+        rm -f data/wikitext.txt
+    fi
+else
+    echo "7. wikitext.txt already exists"
+fi
+echo ""
+
+# ============================================
+# 8. CODE (from various sources)
 # ============================================
 if [ ! -f "data/code.txt" ]; then
     echo "7. Creating code dataset..."
@@ -309,10 +328,10 @@ fi
 echo ""
 
 # ============================================
-# 8. COMBINE ALL (except names and code)
+# 9. COMBINE ALL (except names and code)
 # ============================================
 if [ ! -f "data/training_data.txt" ]; then
-    echo "8. Combining all books into training corpus..."
+    echo "9. Combining all books into training corpus..."
     {
         # Pride and Prejudice
         cat data/pride_prejudice.txt
@@ -332,11 +351,17 @@ if [ ! -f "data/training_data.txt" ]; then
         
         # Alice in Wonderland
         cat data/alice_wonderland.txt
+        echo ""
+        
+        # WikiText
+        if [ -f "data/wikitext.txt" ]; then
+            cat data/wikitext.txt
+        fi
     } > data/training_data.txt
     
     echo "   Done! ($(wc -l < data/training_data.txt) lines)"
 else
-    echo "8. training_data.txt already exists"
+    echo "9. training_data.txt already exists"
 fi
 echo ""
 
