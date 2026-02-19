@@ -12,21 +12,6 @@ This project implements:
 - **Operator Fusion**: Fused kernels for maximum performance on constrained hardware
 - **KV Cache**: Efficient autoregressive generation with 5-10x speedup
 
-### Why This Matters for Raspberry Pi 5
-
-Raspberry Pi 5 has limited compute and memory (8GB/16GB). Traditional transformer implementations quickly run out of memory for:
-- Long sequences (attention is O(n²) in memory)
-- Large models (500M-1B parameters)
-- Autoregressive generation (recomputing K,V every token)
-
-**MicroGPT-RLM-PI solves these with:**
-- ✅ Flash Attention: O(n²) → O(n) memory
-- ✅ INT8 Quantization: 4x smaller models
-- ✅ KV Cache: 5-10x faster generation
-- ✅ Operator Fusion: Reduced memory bandwidth
-
-**Result:** Run 500M-1B parameter models with 1024 token context on a $100 computer!
-
 ## Architecture
 
 ### Standard GPT
@@ -511,24 +496,24 @@ With optimizations, Pi 5 can handle larger models:
 
 | Model Size | Precision | Memory | Seq Length | Status |
 |------------|-----------|--------|------------|--------|
-| 100M | FP32 | 400 MB | 512 | ✅ Comfortable |
-| 100M | INT8 | 100 MB | 512 | ✅ Easy |
-| 500M | FP32 | 2.0 GB | 256 | ⚠️ Tight |
-| 500M | INT8 | 500 MB | 512 | ✅ Comfortable |
-| 1B | FP32 | 4.0 GB | 128 | ❌ OOM |
-| 1B | INT8 | 1.0 GB | 256 | ✅ Comfortable |
-| 1B | INT4 | 500 MB | 512 | ✅ Room for KV cache |
+| 100M | FP32 | 400 MB | 512 | Comfortable |
+| 100M | INT8 | 100 MB | 512 | Easy |
+| 500M | FP32 | 2.0 GB | 256 | Tight |
+| 500M | INT8 | 500 MB | 512 | Comfortable |
+| 1B | FP32 | 4.0 GB | 128 | OOM |
+| 1B | INT8 | 1.0 GB | 256 | Comfortable |
+| 1B | INT4 | 500 MB | 512 | Room for KV cache |
 
 ## Model Configuration
 
 | Model | Parameters | Layers | Heads | Embed Dim | Pi 5 Status |
 |-------|------------|--------|-------|------------|-------------|
-| Micro | ~1M | 2-4 | 2 | 64-128 | ✅ Easy (FP32) |
-| Small | ~10M | 6 | 4 | 256 | ✅ Easy (FP32) |
-| Medium | ~50M | 8 | 8 | 512 | ✅ Comfortable (INT8) |
-| Large | ~100M | 12 | 8 | 768 | ✅ Good (INT8) |
-| **XL** | **~500M** | **16** | **16** | **1024** | **✅ Recommended** |
-| **XXL** | **~1B** | **24** | **16** | **1536** | **✅ With INT8** |
+| Micro | ~1M | 2-4 | 2 | 64-128 | Easy (FP32) |
+| Small | ~10M | 6 | 4 | 256 | Easy (FP32) |
+| Medium | ~50M | 8 | 8 | 512 | Comfortable (INT8) |
+| Large | ~100M | 12 | 8 | 768 | Good (INT8) |
+| **XL** | **~500M** | **16** | **16** | **1024** | **Recommended** |
+| **XXL** | **~1B** | **24** | **16** | **1536** | **With INT8** |
 
 ### Example: 500M Parameter Model (INT8)
 
