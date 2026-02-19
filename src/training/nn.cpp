@@ -225,4 +225,118 @@ int PositionalEmbedding::num_parameters() const {
     return 0;
 }
 
+// ============ QuantizedLinear Implementation ============
+
+QuantizedLinear::QuantizedLinear(int in_features, int out_features, bool use_bias)
+    : in_features(in_features), out_features(out_features), use_bias(use_bias), 
+      quantized(false), use_per_channel(false) {
+    
+    weight_fp32 = Tensor(Shape{out_features, in_features}, true);
+    weight_grad = Tensor(Shape{out_features, in_features}, false);
+    
+    if (use_bias) {
+        bias = Tensor(Shape{out_features}, true);
+        bias_grad = Tensor(Shape{out_features}, false);
+    }
+    
+    init_weights();
+}
+
+Tensor QuantizedLinear::forward(const Tensor& x) {
+    input_cache = x;
+    
+    int batch_size = x.rows();
+    
+    Tensor result(Shape{batch_size, out_features}, false);
+    
+    if (quantized) {
+        // Use quantized weights for inference
+        result = math::int8_matmul(weight_quantized, weight_fp32, weight_quantized.scale);
+    } else {
+        // Use FP32 weights for training
+        result = math::matmul(x, math::transpose(weight_fp32));
+    }
+    
+    if (use_bias) {
+        for (int i = 0; i < batch_size; i++) {
+            for (int j = 0; j < out_features; j++) {
+                result.data[i * out_features + j] += bias.data[j];
+            }
+        }
+    }
+    
+    output_cache = result;
+    return result;
+}
+
+Tensor QuantizedLinear::backward(const Tensor& grad_output) {
+    // Zero gradients
+    math::fill(weight_grad, 0.0f);
+    if (use_bias) {
+        math::fill(bias_grad, 0.0f);
+    }
+    
+    int batch_size = input_cache.rows();
+    
+    // dL/dW = X^T @ dL/dY
+    Tensor grad_weight = math::matmul(math::transpose(input_cache), grad_output);
+    
+    for (int i = 0; i < weight_grad.size(); i++) {
+        weight_grad.data[i] = grad_weight.data[i];
+    }
+    
+    // dL/db = sum(dL/dY, axis=0)
+    if (use_bias) {
+        for (int j = 0; j < out_features; j++) {
+            float sum = 0.0f;
+            for (int i = 0; i < batch_size; i++) {
+                sum += grad_output.data[i * out_features + j];
+            }
+            bias_grad.data[j] = sum;
+        }
+    }
+    
+    // dL/dX = dL/dY @ W^T
+    Tensor grad_input = math::matmul(grad_output, weight_fp32);
+    
+    return grad_input;
+}
+
+void QuantizedLinear::zero_grad() {
+    math::fill(weight_grad, 0.0f);
+    if (use_bias) {
+        math::fill(bias_grad, 0.0f);
+    }
+}
+
+void QuantizedLinear::quantize_weights() {
+    weight_quantized = math::quantize(weight_fp32, use_per_channel);
+    quantized = true;
+}
+
+void QuantizedLinear::dequantize_weights() {
+    if (quantized) {
+        Tensor dequantized = math::dequantize(weight_quantized);
+        for (int i = 0; i < weight_fp32.size(); i++) {
+            weight_fp32.data[i] = dequantized.data[i];
+        }
+        quantized = false;
+    }
+}
+
+void QuantizedLinear::init_weights(float std) {
+    math::normal_(weight_fp32, 0.0f, std);
+    if (use_bias) {
+        math::fill(bias, 0.0f);
+    }
+}
+
+int QuantizedLinear::num_parameters() const {
+    int total = out_features * in_features;
+    if (use_bias) {
+        total += out_features;
+    }
+    return total;
+}
+
 }

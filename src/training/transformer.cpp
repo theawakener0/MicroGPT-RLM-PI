@@ -92,7 +92,8 @@ int RMSNorm::num_parameters() const {
 }
 
 MultiHeadAttention::MultiHeadAttention(int embed_dim, int num_heads)
-    : embed_dim(embed_dim), num_heads(num_heads) {
+    : embed_dim(embed_dim), num_heads(num_heads), use_flash_attention(false),
+      use_kv_cache(false), cache_seq_len(0) {
     
     head_dim = embed_dim / num_heads;
     scale = 1.0f / std::sqrt((float)head_dim);
@@ -155,6 +156,52 @@ Tensor MultiHeadAttention::forward(const Tensor& x, bool causal) {
                     sum += scores_ptr[i * seq_len + j] * v.data[j * embed_dim + hs + d];
                 }
                 result.data[i * embed_dim + hs + d] = sum;
+            }
+        }
+    }
+    
+    result = wo.forward(result);
+    output_cache = result;
+    return result;
+}
+
+Tensor MultiHeadAttention::forward_flash_attention(const Tensor& x, bool causal) {
+    int seq_len = x.rows();
+    
+    Tensor q = wq.forward(x);
+    Tensor k = wk.forward(x);
+    Tensor v = wv.forward(x);
+    
+    q_cache = q;
+    k_cache = k;
+    v_cache = v;
+    
+    Tensor result(Shape{seq_len, embed_dim}, false);
+    
+    // Process each head with Flash Attention
+    for (int h = 0; h < num_heads; h++) {
+        int hs = h * head_dim;
+        
+        // Extract head tensors
+        Tensor q_h(Shape{seq_len, head_dim}, false);
+        Tensor k_h(Shape{seq_len, head_dim}, false);
+        Tensor v_h(Shape{seq_len, head_dim}, false);
+        
+        for (int i = 0; i < seq_len; i++) {
+            for (int d = 0; d < head_dim; d++) {
+                q_h.data[i * head_dim + d] = q.data[i * embed_dim + hs + d];
+                k_h.data[i * head_dim + d] = k.data[i * embed_dim + hs + d];
+                v_h.data[i * head_dim + d] = v.data[i * embed_dim + hs + d];
+            }
+        }
+        
+        // Apply Flash Attention
+        Tensor head_out = math::flash_attention_forward(q_h, k_h, v_h, scale, causal);
+        
+        // Copy back to result
+        for (int i = 0; i < seq_len; i++) {
+            for (int d = 0; d < head_dim; d++) {
+                result.data[i * embed_dim + hs + d] = head_out.data[i * head_dim + d];
             }
         }
     }
@@ -261,6 +308,69 @@ Tensor MultiHeadAttention::backward(const Tensor& grad_output) {
     Tensor grad_input(grad_q.shape, false);
     for (int i = 0; i < grad_q.size(); i++) {
         grad_input.data[i] = grad_q.data[i] + grad_k.data[i] + grad_v.data[i];
+    }
+    
+    return grad_input;
+}
+
+Tensor MultiHeadAttention::backward_flash_attention(const Tensor& grad_output) {
+    wq.zero_grad();
+    wk.zero_grad();
+    wv.zero_grad();
+    wo.zero_grad();
+    
+    int seq_len = q_cache.rows();
+    
+    Tensor grad_wo = wo.backward(grad_output);
+    
+    Tensor grad_q(Shape{seq_len, embed_dim}, false);
+    Tensor grad_k(Shape{seq_len, embed_dim}, false);
+    Tensor grad_v(Shape{seq_len, embed_dim}, false);
+    
+    math::fill(grad_q, 0.0f);
+    math::fill(grad_k, 0.0f);
+    math::fill(grad_v, 0.0f);
+    
+    // Process each head with Flash Attention backward
+    for (int h = 0; h < num_heads; h++) {
+        int hs = h * head_dim;
+        
+        // Extract head tensors
+        Tensor q_h(Shape{seq_len, head_dim}, false);
+        Tensor k_h(Shape{seq_len, head_dim}, false);
+        Tensor v_h(Shape{seq_len, head_dim}, false);
+        Tensor grad_out_h(Shape{seq_len, head_dim}, false);
+        
+        for (int i = 0; i < seq_len; i++) {
+            for (int d = 0; d < head_dim; d++) {
+                q_h.data[i * head_dim + d] = q_cache.data[i * embed_dim + hs + d];
+                k_h.data[i * head_dim + d] = k_cache.data[i * embed_dim + hs + d];
+                v_h.data[i * head_dim + d] = v_cache.data[i * embed_dim + hs + d];
+                grad_out_h.data[i * head_dim + d] = grad_wo.data[i * embed_dim + hs + d];
+            }
+        }
+        
+        // Apply Flash Attention backward
+        auto grad = math::flash_attention_backward(grad_out_h, q_h, k_h, v_h, scale, true);
+        
+        // Accumulate gradients
+        for (int i = 0; i < seq_len; i++) {
+            for (int d = 0; d < head_dim; d++) {
+                grad_q.data[i * embed_dim + hs + d] += grad.grad_q.data[i * head_dim + d];
+                grad_k.data[i * embed_dim + hs + d] += grad.grad_k.data[i * head_dim + d];
+                grad_v.data[i * embed_dim + hs + d] += grad.grad_v.data[i * head_dim + d];
+            }
+        }
+    }
+    
+    // Backpropagate through Q, K, V projections
+    Tensor grad_q_proj = wq.backward(grad_q);
+    Tensor grad_k_proj = wk.backward(grad_k);
+    Tensor grad_v_proj = wv.backward(grad_v);
+    
+    Tensor grad_input(grad_q_proj.shape, false);
+    for (int i = 0; i < grad_q_proj.size(); i++) {
+        grad_input.data[i] = grad_q_proj.data[i] + grad_k_proj.data[i] + grad_v_proj.data[i];
     }
     
     return grad_input;
@@ -445,3 +555,164 @@ int TransformerBlock::num_parameters() const {
 }
 
 }
+#include "transformer.hpp"
+
+namespace microgpt {
+
+Tensor MultiHeadAttention::forward_with_kv_cache(const Tensor& x, bool use_cache) {
+    int seq_len = x.rows();
+    
+    // Compute Q for current token(s)
+    Tensor q = wq.forward(x);
+    
+    Tensor k, v;
+    
+    if (use_cache && cache_seq_len > 0) {
+        // Compute K and V only for new tokens
+        Tensor k_new = wk.forward(x);
+        Tensor v_new = wv.forward(x);
+        
+        // Append to cache
+        int new_total_len = cache_seq_len + seq_len;
+        
+        // Extend cache if needed
+        if (k_cache_kv.rows() < new_total_len) {
+            int new_capacity = std::max(new_total_len, cache_seq_len * 2);
+            Tensor new_k_cache(Shape{new_capacity, embed_dim}, false);
+            Tensor new_v_cache(Shape{new_capacity, embed_dim}, false);
+            
+            // Copy old cache
+            for (int i = 0; i < cache_seq_len; i++) {
+                for (int j = 0; j < embed_dim; j++) {
+                    new_k_cache.data[i * embed_dim + j] = k_cache_kv.data[i * embed_dim + j];
+                    new_v_cache.data[i * embed_dim + j] = v_cache_kv.data[i * embed_dim + j];
+                }
+            }
+            
+            k_cache_kv = new_k_cache;
+            v_cache_kv = new_v_cache;
+        }
+        
+        // Append new values
+        for (int i = 0; i < seq_len; i++) {
+            for (int j = 0; j < embed_dim; j++) {
+                k_cache_kv.data[(cache_seq_len + i) * embed_dim + j] = k_new.data[i * embed_dim + j];
+                v_cache_kv.data[(cache_seq_len + i) * embed_dim + j] = v_new.data[i * embed_dim + j];
+            }
+        }
+        
+        cache_seq_len = new_total_len;
+        
+        // Create views of the cache
+        k = Tensor(Shape{cache_seq_len, embed_dim}, false);
+        v = Tensor(Shape{cache_seq_len, embed_dim}, false);
+        
+        for (int i = 0; i < cache_seq_len; i++) {
+            for (int j = 0; j < embed_dim; j++) {
+                k.data[i * embed_dim + j] = k_cache_kv.data[i * embed_dim + j];
+                v.data[i * embed_dim + j] = v_cache_kv.data[i * embed_dim + j];
+            }
+        }
+    } else {
+        // No cache or first call - compute full K and V
+        k = wk.forward(x);
+        v = wv.forward(x);
+        
+        if (use_cache) {
+            // Initialize cache
+            int capacity = std::max(seq_len, 256);
+            k_cache_kv = Tensor(Shape{capacity, embed_dim}, false);
+            v_cache_kv = Tensor(Shape{capacity, embed_dim}, false);
+            
+            for (int i = 0; i < seq_len; i++) {
+                for (int j = 0; j < embed_dim; j++) {
+                    k_cache_kv.data[i * embed_dim + j] = k.data[i * embed_dim + j];
+                    v_cache_kv.data[i * embed_dim + j] = v.data[i * embed_dim + j];
+                }
+            }
+            
+            cache_seq_len = seq_len;
+        }
+    }
+    
+    // Store for backward
+    q_cache = q;
+    k_cache = k;
+    v_cache = v;
+    
+    // Compute attention with cached K, V
+    Tensor result(Shape{seq_len, embed_dim}, false);
+    
+    for (int h = 0; h < num_heads; h++) {
+        int hs = h * head_dim;
+        
+        Tensor q_h(Shape{seq_len, head_dim}, false);
+        Tensor k_h(Shape{k.rows(), head_dim}, false);
+        Tensor v_h(Shape{v.rows(), head_dim}, false);
+        
+        for (int i = 0; i < seq_len; i++) {
+            for (int d = 0; d < head_dim; d++) {
+                q_h.data[i * head_dim + d] = q.data[i * embed_dim + hs + d];
+            }
+        }
+        
+        for (int i = 0; i < k.rows(); i++) {
+            for (int d = 0; d < head_dim; d++) {
+                k_h.data[i * head_dim + d] = k.data[i * embed_dim + hs + d];
+                v_h.data[i * head_dim + d] = v.data[i * embed_dim + hs + d];
+            }
+        }
+        
+        // Compute attention scores and apply softmax
+        for (int i = 0; i < seq_len; i++) {
+            int kv_len = k.rows();
+            
+            // Compute scores
+            Tensor scores(Shape{kv_len}, false);
+            for (int j = 0; j < kv_len; j++) {
+                float dot = 0.0f;
+                for (int d = 0; d < head_dim; d++) {
+                    dot += q_h.data[i * head_dim + d] * k_h.data[j * head_dim + d];
+                }
+                scores.data[j] = dot * scale;
+            }
+            
+            // Softmax
+            float max_val = scores.data[0];
+            for (int j = 1; j < kv_len; j++) {
+                max_val = std::max(max_val, scores.data[j]);
+            }
+            
+            float sum_exp = 0.0f;
+            for (int j = 0; j < kv_len; j++) {
+                scores.data[j] = std::exp(scores.data[j] - max_val);
+                sum_exp += scores.data[j];
+            }
+            
+            for (int j = 0; j < kv_len; j++) {
+                scores.data[j] /= sum_exp;
+            }
+            
+            // Apply to values
+            for (int d = 0; d < head_dim; d++) {
+                float sum = 0.0f;
+                for (int j = 0; j < kv_len; j++) {
+                    sum += scores.data[j] * v_h.data[j * head_dim + d];
+                }
+                result.data[i * embed_dim + hs + d] = sum;
+            }
+        }
+    }
+    
+    result = wo.forward(result);
+    output_cache = result;
+    return result;
+}
+
+void MultiHeadAttention::clear_kv_cache() {
+    k_cache_kv = Tensor();
+    v_cache_kv = Tensor();
+    cache_seq_len = 0;
+}
+
+} // namespace microgpt

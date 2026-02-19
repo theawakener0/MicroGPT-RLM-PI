@@ -72,4 +72,41 @@ public:
     int num_parameters() const;
 };
 
+class QuantizedLinear {
+public:
+    int in_features;
+    int out_features;
+    bool use_bias;
+    
+    // Quantized weights (INT8)
+    math::QuantizedTensor weight_quantized;
+    Tensor bias;
+    
+    // For training: keep FP32 weights
+    Tensor weight_fp32;
+    Tensor weight_grad;
+    Tensor bias_grad;
+    
+    Tensor input_cache;
+    Tensor output_cache;
+    
+    bool quantized;
+    bool use_per_channel;
+    
+    QuantizedLinear() = default;
+    QuantizedLinear(int in_features, int out_features, bool use_bias = false);
+    
+    Tensor forward(const Tensor& x);
+    Tensor backward(const Tensor& grad_output);
+    void zero_grad();
+    
+    void quantize_weights();
+    void dequantize_weights();
+    bool is_quantized() const { return quantized; }
+    void set_per_channel(bool per_channel) { use_per_channel = per_channel; }
+    
+    void init_weights(float std = 0.02f);
+    int num_parameters() const;
+};
+
 }
