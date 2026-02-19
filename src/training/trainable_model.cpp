@@ -64,6 +64,25 @@ Tensor TrainableGPT::forward(const std::vector<int>& input_ids) {
     return lm_head.forward(x);
 }
 
+Tensor TrainableGPT::forward_single(int token_id, int pos_id) {
+    std::vector<int> token_ids = {token_id};
+    Tensor token_emb = token_embedding.forward(token_ids);
+    
+    Tensor pos_emb = pos_embedding.forward(pos_id + 1);
+    
+    Tensor x(Shape{1, config.embed_dim}, false);
+    for (int i = 0; i < config.embed_dim; i++) {
+        x.data[i] = token_emb.data[i] + pos_emb.data[i];
+    }
+    
+    for (auto& layer : layers) {
+        x = layer.forward(x);
+    }
+    
+    x = ln_f.forward(x);
+    return lm_head.forward(x);
+}
+
 TrainableGPT::ForwardOutput TrainableGPT::forward(const std::vector<int>& input_ids, 
                                                  const std::vector<int>& target_ids) {
     int seq_len = input_ids.size();

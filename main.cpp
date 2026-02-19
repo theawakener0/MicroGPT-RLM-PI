@@ -197,7 +197,7 @@ void run_training_mode(GPT& model, Tokenizer& tokenizer, const std::string& data
 }
 
 void run_demo() {
-    Logger::info("=== MicroGPT-RLM Demo ===");
+    Logger::info("=== MicroGPT-RLM-PI Demo ===");
     
     std::vector<std::string> names = {
         "emma", "olivia", "ava", "isabella", "sophia", 
@@ -341,7 +341,7 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    Logger::info("MicroGPT-RLM v1.0.0");
+    Logger::info("MicroGPT-RLM-PI v1.0.0");
     Logger::info("Mode: " + mode);
     
     if (mode == "demo") {

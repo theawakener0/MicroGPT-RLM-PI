@@ -41,6 +41,7 @@ public:
     };
     
     Tensor forward(const std::vector<int>& input_ids);
+    Tensor forward_single(int token_id, int pos_id);
     ForwardOutput forward(const std::vector<int>& input_ids, 
                          const std::vector<int>& target_ids);
     
