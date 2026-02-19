@@ -45,6 +45,25 @@ TrainableGPT::TrainableGPT(const ModelConfig& config) : config(config) {
     }
 }
 
+Tensor TrainableGPT::forward(const std::vector<int>& input_ids) {
+    int seq_len = input_ids.size();
+    
+    Tensor token_emb = token_embedding.forward(input_ids);
+    Tensor pos_emb = pos_embedding.forward(seq_len);
+    
+    Tensor x(token_emb.shape, false);
+    for (int i = 0; i < x.size(); i++) {
+        x.data[i] = token_emb.data[i] + pos_emb.data[i];
+    }
+    
+    for (auto& layer : layers) {
+        x = layer.forward(x);
+    }
+    
+    x = ln_f.forward(x);
+    return lm_head.forward(x);
+}
+
 TrainableGPT::ForwardOutput TrainableGPT::forward(const std::vector<int>& input_ids, 
                                                  const std::vector<int>& target_ids) {
     int seq_len = input_ids.size();
@@ -217,7 +236,7 @@ void TrainableGPT::save(const std::string& path) {
     save_tensor(lm_head.weight);
     save_tensor(ln_f.weight);
     
-    for (const auto& layer : layers) {
+    for (auto& layer : layers) {
         for (auto* p : layer.attn.parameters()) {
             save_tensor(*p);
         }

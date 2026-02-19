@@ -40,6 +40,7 @@ public:
         float loss;
     };
     
+    Tensor forward(const std::vector<int>& input_ids);
     ForwardOutput forward(const std::vector<int>& input_ids, 
                          const std::vector<int>& target_ids);
     

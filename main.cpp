@@ -8,7 +8,9 @@
 #include "src/core/math_ops.hpp"
 #include "src/training/tokenizer.hpp"
 #include "src/training/trainer.hpp"
-#include "src/model/model.hpp"
+#include "src/training/trainable_model.hpp"
+
+using GPT = microgpt::TrainableGPT;
 
 using namespace microgpt;
 

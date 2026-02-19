@@ -78,7 +78,9 @@ void RMSNorm::zero_grad() {
 }
 
 std::vector<Tensor*> RMSNorm::parameters() {
-    return {&weight};
+    std::vector<Tensor*> params;
+    params.push_back(&weight);
+    return params;
 }
 
 void RMSNorm::init_weights() {
@@ -112,69 +114,47 @@ Tensor MultiHeadAttention::forward(const Tensor& x, bool causal) {
     k_cache = k;
     v_cache = v;
     
+    attn_cache = Tensor(Shape{seq_len, seq_len * num_heads}, false);
+    
     Tensor result(Shape{seq_len, embed_dim}, false);
     
     for (int h = 0; h < num_heads; h++) {
         int hs = h * head_dim;
         
-        Tensor q_h(Shape{seq_len, head_dim}, false);
-        for (int i = 0; i < seq_len; i++) {
-            for (int j = 0; j < head_dim; j++) {
-                q_h.data[i * head_dim + j] = q.data[i * embed_dim + hs + j];
-            }
-        }
-        
-        std::vector<Tensor> k_h(seq_len);
-        std::vector<Tensor> v_h(seq_len);
+        float* scores_ptr = attn_cache.data.data() + h * seq_len * seq_len;
+        math::attention_scores_neon(scores_ptr, 
+                                    q.data.data() + hs, 
+                                    k.data.data() + hs, 
+                                    seq_len, head_dim, scale);
         
         for (int i = 0; i < seq_len; i++) {
-            k_h[i] = Tensor(Shape{head_dim}, false);
-            v_h[i] = Tensor(Shape{head_dim}, false);
-            for (int j = 0; j < head_dim; j++) {
-                k_h[i].data[j] = k.data[i * embed_dim + hs + j];
-                v_h[i].data[j] = v.data[i * embed_dim + hs + j];
-            }
-        }
-        
-        for (int i = 0; i < seq_len; i++) {
-            int start = causal ? 0 : 0;
-            int end = i + 1;
-            
-            Tensor attn_logits(Shape{end - start}, false);
-            for (int tj = start; tj < end; tj++) {
-                float dot = 0.0f;
-                for (int j = 0; j < head_dim; j++) {
-                    dot += q_h.data[i * head_dim + j] * k_h[tj].data[j];
-                }
-                attn_logits.data[tj - start] = dot * scale;
-            }
-            
-            float max_val = attn_logits.data[0];
-            for (int j = 1; j < attn_logits.size(); j++) {
-                max_val = std::max(max_val, attn_logits.data[j]);
+            float max_val = scores_ptr[i * seq_len];
+            for (int j = 1; j <= i; j++) {
+                max_val = std::max(max_val, scores_ptr[i * seq_len + j]);
             }
             
             float sum_exp = 0.0f;
-            for (int j = 0; j < attn_logits.size(); j++) {
-                attn_logits.data[j] = std::exp(attn_logits.data[j] - max_val);
-                sum_exp += attn_logits.data[j];
+            for (int j = 0; j <= i; j++) {
+                scores_ptr[i * seq_len + j] = std::exp(scores_ptr[i * seq_len + j] - max_val);
+                sum_exp += scores_ptr[i * seq_len + j];
             }
             
-            for (int j = 0; j < attn_logits.size(); j++) {
-                attn_logits.data[j] /= sum_exp;
+            for (int j = 0; j <= i; j++) {
+                scores_ptr[i * seq_len + j] /= sum_exp;
             }
             
-            Tensor head_out(Shape{head_dim}, false);
-            for (int j = 0; j < head_dim; j++) {
+            for (int j = i + 1; j < seq_len; j++) {
+                scores_ptr[i * seq_len + j] = 0.0f;
+            }
+        }
+        
+        for (int i = 0; i < seq_len; i++) {
+            for (int d = 0; d < head_dim; d++) {
                 float sum = 0.0f;
-                for (int tj = start; tj < end; tj++) {
-                    sum += attn_logits.data[tj - start] * v_h[tj].data[j];
+                for (int j = 0; j <= i; j++) {
+                    sum += scores_ptr[i * seq_len + j] * v.data[j * embed_dim + hs + d];
                 }
-                head_out.data[j] = sum;
-            }
-            
-            for (int j = 0; j < head_dim; j++) {
-                result.data[i * embed_dim + hs + j] = head_out.data[j];
+                result.data[i * embed_dim + hs + d] = sum;
             }
         }
     }

@@ -346,6 +346,169 @@ Tensor attention_apply(const Tensor& weights, const Tensor& v) {
     return result;
 }
 
+// ============ NEON-Optimized Attention ============
+
+void attention_scores_neon(float* scores, const float* q, const float* k, 
+                           int seq_len, int head_dim, float scale) {
+    #if USE_NEON
+    for (int i = 0; i < seq_len; i++) {
+        for (int j = 0; j < seq_len; j++) {
+            float dot = 0.0f;
+            int d = 0;
+            float32x4_t vsum = vdupq_n_f32(0.0f);
+            
+            for (; d + 3 < head_dim; d += 4) {
+                float32x4_t vq = vld1q_f32(&q[i * head_dim + d]);
+                float32x4_t vk = vld1q_f32(&k[j * head_dim + d]);
+                vsum = vmlaq_f32(vsum, vq, vk);
+            }
+            
+            float32x2_t vsum_low = vget_low_f32(vsum);
+            float32x2_t vsum_high = vget_high_f32(vsum);
+            float32x2_t vsum_pair = vadd_f32(vsum_low, vsum_high);
+            dot = vget_lane_f32(vsum_pair, 0) + vget_lane_f32(vsum_pair, 1);
+            
+            for (; d < head_dim; d++) {
+                dot += q[i * head_dim + d] * k[j * head_dim + d];
+            }
+            
+            scores[i * seq_len + j] = dot * scale;
+        }
+    }
+    #else
+    for (int i = 0; i < seq_len; i++) {
+        for (int j = 0; j < seq_len; j++) {
+            float dot = 0.0f;
+            for (int d = 0; d < head_dim; d++) {
+                dot += q[i * head_dim + d] * k[j * head_dim + d];
+            }
+            scores[i * seq_len + j] = dot * scale;
+        }
+    }
+    #endif
+}
+
+void softmax_causal_neon(float* scores, int seq_len) {
+    #if USE_NEON
+    for (int i = 0; i < seq_len; i++) {
+        float max_val = scores[i * seq_len];
+        for (int j = 1; j <= i; j++) {
+            max_val = std::max(max_val, scores[i * seq_len + j]);
+        }
+        
+        float sum_exp = 0.0f;
+        int j = 0;
+        float32x4_t vmax = vdupq_n_f32(max_val);
+        
+        for (; j + 3 <= i + 1; j += 4) {
+            float32x4_t vx = vld1q_f32(&scores[i * seq_len + j]);
+            float32x4_t vdiff = vsubq_f32(vx, vmax);
+            float32x4_t vexp = exp_ps(vdiff);
+            vst1q_f32(&scores[i * seq_len + j], vexp);
+            
+            float32x2_t vsum_low = vget_low_f32(vexp);
+            float32x2_t vsum_high = vget_high_f32(vexp);
+            float32x2_t vsum_pair = vadd_f32(vsum_low, vsum_high);
+            sum_exp += vget_lane_f32(vsum_pair, 0) + vget_lane_f32(vsum_pair, 1);
+        }
+        
+        for (; j <= i; j++) {
+            scores[i * seq_len + j] = std::exp(scores[i * seq_len + j] - max_val);
+            sum_exp += scores[i * seq_len + j];
+        }
+        
+        j = 0;
+        float32x4_t vsum = vdupq_n_f32(sum_exp);
+        for (; j + 3 <= i + 1; j += 4) {
+            float32x4_t vexp = vld1q_f32(&scores[i * seq_len + j]);
+            float32x4_t vnorm = vdivq_f32(vexp, vsum);
+            vst1q_f32(&scores[i * seq_len + j], vnorm);
+        }
+        for (; j <= i; j++) {
+            scores[i * seq_len + j] /= sum_exp;
+        }
+        
+        for (int j = i + 1; j < seq_len; j++) {
+            scores[i * seq_len + j] = 0.0f;
+        }
+    }
+    #else
+    for (int i = 0; i < seq_len; i++) {
+        float max_val = scores[i * seq_len];
+        for (int j = 1; j <= i; j++) {
+            max_val = std::max(max_val, scores[i * seq_len + j]);
+        }
+        
+        float sum_exp = 0.0f;
+        for (int j = 0; j <= i; j++) {
+            scores[i * seq_len + j] = std::exp(scores[i * seq_len + j] - max_val);
+            sum_exp += scores[i * seq_len + j];
+        }
+        
+        for (int j = 0; j <= i; j++) {
+            scores[i * seq_len + j] /= sum_exp;
+        }
+        
+        for (int j = i + 1; j < seq_len; j++) {
+            scores[i * seq_len + j] = 0.0f;
+        }
+    }
+    #endif
+}
+
+void attention_apply_neon(float* out, const float* weights, const float* v,
+                          int seq_len, int head_dim) {
+    #if USE_NEON
+    for (int i = 0; i < seq_len; i++) {
+        for (int d = 0; d < head_dim; d++) {
+            float sum = 0.0f;
+            int j = 0;
+            float32x4_t vsum = vdupq_n_f32(0.0f);
+            
+            for (; j + 3 <= i + 1; j += 4) {
+                float32x4_t vw = vld1q_f32(&weights[i * seq_len + j]);
+                float32x4_t vv;
+                vv = vsetq_lane_f32(v[(j + 0) * head_dim + d], vv, 0);
+                vv = vsetq_lane_f32(v[(j + 1) * head_dim + d], vv, 1);
+                vv = vsetq_lane_f32(v[(j + 2) * head_dim + d], vv, 2);
+                vv = vsetq_lane_f32(v[(j + 3) * head_dim + d], vv, 3);
+                vsum = vmlaq_f32(vsum, vw, vv);
+            }
+            
+            float32x2_t vsum_low = vget_low_f32(vsum);
+            float32x2_t vsum_high = vget_high_f32(vsum);
+            float32x2_t vsum_pair = vadd_f32(vsum_low, vsum_high);
+            sum = vget_lane_f32(vsum_pair, 0) + vget_lane_f32(vsum_pair, 1);
+            
+            for (; j <= i; j++) {
+                sum += weights[i * seq_len + j] * v[j * head_dim + d];
+            }
+            
+            out[i * head_dim + d] = sum;
+        }
+    }
+    #else
+    for (int i = 0; i < seq_len; i++) {
+        for (int d = 0; d < head_dim; d++) {
+            float sum = 0.0f;
+            for (int j = 0; j <= i; j++) {
+                sum += weights[i * seq_len + j] * v[j * head_dim + d];
+            }
+            out[i * head_dim + d] = sum;
+        }
+    }
+    #endif
+}
+
+void scaled_dot_product_attention(float* out, const float* q, const float* k, 
+                                  const float* v, int seq_len, int head_dim, float scale) {
+    std::vector<float> scores(seq_len * seq_len);
+    
+    attention_scores_neon(scores.data(), q, k, seq_len, head_dim, scale);
+    softmax_causal_neon(scores.data(), seq_len);
+    attention_apply_neon(out, scores.data(), v, seq_len, head_dim);
+}
+
 // ============ Utilities ============
 
 void zero(Tensor& t) {

@@ -1,11 +1,13 @@
 #pragma once
-#include "../model/model.hpp"
+#include "../training/trainable_model.hpp"
 #include "../training/tokenizer.hpp"
 #include <string>
 #include <vector>
 #include <random>
 
 namespace microgpt {
+
+using GPT = TrainableGPT;
 
 class AdamOptimizer {
 public:

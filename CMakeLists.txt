@@ -26,20 +26,21 @@ endif()
 find_package(OpenMP REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 
-# Source files
+# Source files (training/ has full implementation with backprop)
 set(SOURCES
     src/core/tensor.cpp
     src/core/autograd.cpp
     src/core/math_ops.cpp
-    src/model/embedding.cpp
-    src/model/attention.cpp
-    src/model/transformer.cpp
-    src/model/model.cpp
+    src/core/memory_pool.cpp
     src/training/tokenizer.cpp
     src/training/dataset.cpp
     src/training/trainer.cpp
+    src/training/trainable_model.cpp
+    src/training/transformer.cpp
+    src/training/nn.cpp
     src/inference/sampler.cpp
     src/inference/generator.cpp
+    src/rlm/rlm.cpp
     src/utils/random.cpp
     src/utils/logger.cpp
 )
@@ -49,15 +50,15 @@ set(HEADERS
     src/core/autograd.hpp
     src/core/math_ops.hpp
     src/core/memory_pool.hpp
-    src/model/embedding.hpp
-    src/model/attention.hpp
-    src/model/transformer.hpp
-    src/model/model.hpp
     src/training/tokenizer.hpp
     src/training/dataset.hpp
     src/training/trainer.hpp
+    src/training/trainable_model.hpp
+    src/training/transformer.hpp
+    src/training/nn.hpp
     src/inference/sampler.hpp
     src/inference/generator.hpp
+    src/rlm/rlm.hpp
     src/utils/random.hpp
     src/utils/logger.hpp
     src/utils/timer.hpp

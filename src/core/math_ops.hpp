@@ -29,6 +29,15 @@ Tensor softmax(const Tensor& logits);
 Tensor attention_scores(const Tensor& q, const Tensor& k, float scale);
 Tensor attention_apply(const Tensor& weights, const Tensor& v);
 
+void attention_scores_neon(float* scores, const float* q, const float* k, 
+                           int seq_len, int head_dim, float scale);
+void softmax_causal_neon(float* scores, int seq_len);
+void attention_apply_neon(float* out, const float* weights, const float* v,
+                          int seq_len, int head_dim);
+
+void scaled_dot_product_attention(float* out, const float* q, const float* k, 
+                                  const float* v, int seq_len, int head_dim, float scale);
+
 // Utilities
 void zero(Tensor& t);
 void fill(Tensor& t, float value);
